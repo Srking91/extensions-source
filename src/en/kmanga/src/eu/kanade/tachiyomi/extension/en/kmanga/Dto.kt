@@ -96,7 +96,7 @@ class Episode(
 
     fun toSChapter(dateFormat: SimpleDateFormat): SChapter = SChapter.create().apply {
         url = "/title/$titleId/episode/$episodeId"
-        val lock = if (isLocked) "🔒 " else ""
+        val lock = if (isLocked) "" else ""
         var parsedName = episodeName
 
         val match = chapterNameRegex.find(episodeName)

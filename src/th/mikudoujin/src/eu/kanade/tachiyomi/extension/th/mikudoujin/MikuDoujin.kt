@@ -8,25 +8,22 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
-class MikuDoujin : HttpSource() {
-
-    override val baseUrl: String = "https://miku-doujin.com"
-
-    override val lang: String = "th"
-    override val name: String = "MikuDoujin"
+@Source
+abstract class MikuDoujin : HttpSource() {
 
     override val supportsLatest: Boolean = true
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
-        .connectTimeout(1, TimeUnit.MINUTES)
-        .readTimeout(1, TimeUnit.MINUTES)
-        .writeTimeout(1, TimeUnit.MINUTES)
+    override val client: OkHttpClient = network.client.newBuilder()
+        .connectTimeout(1.minutes)
+        .readTimeout(1.minutes)
+        .writeTimeout(1.minutes)
         .build()
 
     // Popular
@@ -148,7 +145,8 @@ class MikuDoujin : HttpSource() {
 
     override fun pageListParse(response: Response): List<Page> {
         val document = response.asJsoup()
-        return document.select("div#v-pills-tabContent img.lazy").mapIndexed { i, img ->
+        val query = "div#v-pills-tabContent img.lazy, div#v-pills-tabContent img.page-img"
+        return document.select(query).mapIndexed { i, img ->
             val url = if (img.hasAttr("data-src")) {
                 img.attr("abs:data-src")
             } else {

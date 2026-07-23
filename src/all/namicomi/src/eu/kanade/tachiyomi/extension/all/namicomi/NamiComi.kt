@@ -13,7 +13,6 @@ import eu.kanade.tachiyomi.extension.all.namicomi.dto.MangaListDto
 import eu.kanade.tachiyomi.extension.all.namicomi.dto.PageListDto
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -21,6 +20,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.encodeToString
 import okhttp3.CacheControl
@@ -32,12 +33,21 @@ import okhttp3.Response
 import okio.IOException
 import rx.Observable
 
-abstract class NamiComi(final override val lang: String, private val extLang: String = lang) :
+@Source
+abstract class NamiComi :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "NamiComi"
-    override val baseUrl = NamiComiConstants.WEB_URL
+    private val extLang: String
+        get() = when (lang) {
+            "zh-Hans" -> "zh-hans"
+            "zh-Hant" -> "zh-hant"
+            "pt-BR" -> "pt-br"
+            "pt" -> "pt-pt"
+            "es" -> "es-es"
+            else -> lang
+        }
+
     override val supportsLatest = true
 
     private val preferences: SharedPreferences by getPreferencesLazy()
@@ -49,8 +59,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
         set("Origin", baseUrl)
     }
 
-    override val client = network.cloudflareClient.newBuilder()
-        .rateLimit(3)
+    override val client = network.client.newBuilder()
         .addNetworkInterceptor { chain ->
             val response = chain.proceed(chain.request())
 
@@ -61,6 +70,7 @@ abstract class NamiComi(final override val lang: String, private val extLang: St
 
             return@addNetworkInterceptor response
         }
+        .rateLimit(3)
         .build()
 
     private fun sortedMangaRequest(page: Int, orderBy: String): Request {

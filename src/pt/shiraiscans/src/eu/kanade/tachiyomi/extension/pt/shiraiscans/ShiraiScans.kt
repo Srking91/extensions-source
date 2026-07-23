@@ -9,6 +9,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -20,17 +21,12 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class ShiraiScans : HttpSource() {
-
-    override val name = "Shirai Scans"
-
-    override val baseUrl = "https://shiraixis.space"
-
-    override val lang = "pt-BR"
+@Source
+abstract class ShiraiScans : HttpSource() {
 
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()

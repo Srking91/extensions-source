@@ -5,7 +5,6 @@ import android.util.Log
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -13,6 +12,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonString
@@ -36,15 +37,11 @@ const val DOMAIN = "mangacloud.org"
 const val API_URL = "https://api.$DOMAIN"
 const val CDN_URL = "https://pika.$DOMAIN"
 
-class MangaCloud : HttpSource() {
-    override val name = "MangaCloud"
-    override val lang = "en"
-
-    override val baseUrl = "https://$DOMAIN"
-
+@Source
+abstract class MangaCloud : HttpSource() {
     override val supportsLatest = true
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(1)
         .build()
 
@@ -273,7 +270,7 @@ class MangaCloud : HttpSource() {
     override fun pageListRequest(chapter: SChapter): Request {
         val chapterId = chapter.url.parseAs<ChapterUrl>().chapterId
 
-        return GET("$API_URL/chapter2/$chapterId", headers)
+        return GET("$API_URL/chapter5/$chapterId", headers)
     }
 
     override fun getChapterUrl(chapter: SChapter): String {

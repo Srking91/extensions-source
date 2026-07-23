@@ -32,19 +32,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 // Formerly WPMangaStream & WPMangaReader -> MangaThemesia
-abstract class MangaThemesia(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-    val mangaUrlDirectory: String = "/manga",
-    val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-) : HttpSource() {
+abstract class MangaThemesia : HttpSource() {
+
+    open val mangaUrlDirectory: String = "/manga"
+    open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 
     protected open val json: Json by injectLazy()
 
     override val supportsLatest = true
-
-    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .set("Referer", "$baseUrl/")

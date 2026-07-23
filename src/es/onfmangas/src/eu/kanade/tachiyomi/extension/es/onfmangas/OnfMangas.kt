@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.extension.es.onfmangas
 
+import app.cash.quickjs.QuickJs
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -8,37 +9,69 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
+import okhttp3.Cookie
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class OnfMangas : HttpSource() {
+@Source
+abstract class OnfMangas : HttpSource() {
 
-    override val name = "ONF MANGAS"
-    override val baseUrl = "https://onfmangas.com"
-    override val lang = "es"
     override val supportsLatest = true
+
+    override val client = super.client.newBuilder()
+        .addInterceptor(::onfTokenInterceptor)
+        .build()
+
+    private fun onfTokenInterceptor(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+        val response = chain.proceed(request)
+
+        val body = response.peekBody(8192).string()
+        if (!body.contains("Verificando")) return response
+
+        val cookieString = solveOnfCheck(response) ?: error("Failed to solve cookie challange")
+        val cookie = Cookie.parse(request.url, cookieString)
+        client.cookieJar.saveFromResponse(request.url, listOfNotNull(cookie))
+
+        return chain.proceed(request)
+    }
+
+    private fun solveOnfCheck(response: Response): String? {
+        val document = response.asJsoup()
+        val script = document.selectFirst("script")?.data() ?: error("Failed to find cookie challange script")
+
+        return QuickJs.create().use { js ->
+            js.evaluate(
+                """
+            var window = { location: {} };
+            var document = { cookie: null };
+            var location = window.location;
+            var setTimeout = function(fn, _) { fn(); };
+
+            $script
+
+            document.cookie;
+                """.trimIndent(),
+            )?.toString()
+        }
+    }
 
     // Mimic a standard desktop browser to bypass Cloudflare WAF 403s
     override fun headersBuilder() = super.headersBuilder()
         .set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:150.0) Gecko/20100101 Firefox/150.0")
         .set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
         .set("Accept-Language", "en-US,en;q=0.9")
-        .set("DNT", "1")
-        .set("Sec-GPC", "1")
-        .set("Connection", "keep-alive")
-        .set("Upgrade-Insecure-Requests", "1")
-        .set("Sec-Fetch-Dest", "document")
-        .set("Sec-Fetch-Mode", "navigate")
         .set("Sec-Fetch-Site", "none")
-        .set("Sec-Fetch-User", "?1")
-        .set("Priority", "u=0, i")
 
     private val dateFormat by lazy {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.ROOT).apply {
@@ -191,6 +224,21 @@ class OnfMangas : HttpSource() {
         val pagesData = jsonString.parseAs<List<PageDto>>()
 
         return pagesData.mapIndexed { index, dto -> dto.toPage(index) }
+    }
+
+    // Decent chance for primary src to fail
+    override fun fetchImageUrl(page: Page): Observable<String> {
+        val src = page.url
+        val fallback = page.url.toHttpUrl().fragment?.removePrefix("fallback=")
+
+        if (fallback.isNullOrBlank()) return Observable.just(src)
+
+        return Observable.fromCallable {
+            val response = client.newCall(Request.Builder().head().url(src).build()).execute()
+            val success = response.isSuccessful
+            response.close()
+            if (success) src else fallback
+        }
     }
 
     override fun imageUrlParse(response: Response): String = throw UnsupportedOperationException()

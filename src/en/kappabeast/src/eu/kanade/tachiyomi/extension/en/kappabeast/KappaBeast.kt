@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.en.kappabeast
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -9,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstance
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Builder
@@ -18,18 +19,15 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import rx.Observable
 
-class KappaBeast : HttpSource() {
-    private val domain = "kappabeast.com"
-    override val baseUrl = "https://$domain"
-    override val lang = "en"
+@Source
+abstract class KappaBeast : HttpSource() {
     override val supportsLatest = true
-    override val name = "Kappa Beast"
-    override val versionId = 2
 
+    private val domain = baseUrl.toHttpUrl().host
     private val cdnUrl = "https://strapi.$domain"
     private val apiUrl = "$cdnUrl/api"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(3)
         .build()
 

@@ -6,7 +6,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimitHost
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -14,7 +13,9 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.i18n.Intl
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -30,16 +31,40 @@ import rx.Observable
 import uy.kohesive.injekt.injectLazy
 import java.util.UUID
 
-class MangaPlus(
-    override val lang: String,
-    private val internalLang: String,
-    private val langCode: Language,
-) : HttpSource(),
+@Source
+abstract class MangaPlus :
+    HttpSource(),
     ConfigurableSource {
+    private val internalLang: String
+        get() = when (lang) {
+            "en" -> "eng"
+            "es" -> "esp"
+            "fr" -> "fra"
+            "id" -> "ind"
+            "pt-BR" -> "ptb"
+            "ru" -> "rus"
+            "th" -> "tha"
+            "vi" -> "vie"
+            "de" -> "deu"
+            else -> throw IllegalStateException("Unsupported lang: $lang")
+        }
 
-    override val name = "MANGA Plus by SHUEISHA"
+    private val langCode: Language
+        get() = when (lang) {
+            "en" -> Language.ENGLISH
+            "es" -> Language.SPANISH
+            "fr" -> Language.FRENCH
+            "id" -> Language.INDONESIAN
+            "pt-BR" -> Language.PORTUGUESE_BR
+            "ru" -> Language.RUSSIAN
+            "th" -> Language.THAI
+            "vi" -> Language.VIETNAMESE
+            "de" -> Language.GERMAN
+            else -> throw IllegalStateException("Unsupported lang: $lang")
+        }
 
-    override val baseUrl = "https://mangaplus.shueisha.co.jp"
+    private val apiurlHost by lazy { API_URL.toHttpUrl().host }
+    private val baseUrlHost by lazy { baseUrl.toHttpUrl().host }
 
     override val supportsLatest = true
 
@@ -49,11 +74,11 @@ class MangaPlus(
         .add("User-Agent", USER_AGENT)
         .add("SESSION-TOKEN", UUID.randomUUID().toString())
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::imageIntercept)
         .addInterceptor(::thumbnailIntercept)
-        .rateLimitHost(API_URL.toHttpUrl(), 1)
-        .rateLimitHost(baseUrl.toHttpUrl(), 2)
+        .rateLimit(1) { it.host == apiurlHost }
+        .rateLimit(2) { it.host == baseUrlHost }
         .build()
 
     private val json: Json by injectLazy()

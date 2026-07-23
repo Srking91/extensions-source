@@ -1,13 +1,14 @@
 package eu.kanade.tachiyomi.extension.id.shinigami
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
@@ -17,25 +18,15 @@ import okhttp3.Response
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class Shinigami : HttpSource() {
-    // moved from Reaper Scans (id) to Shinigami (id)
-    override val id = 3411809758861089969
-
-    override val name = "Shinigami"
-
-    override val baseUrl = "https://g.shinigami.asia"
-
+@Source
+abstract class Shinigami : HttpSource() {
     private val apiUrl = "https://api.shngm.io"
-
-    private val cdnUrl = "https://storage.shngm.id"
-
-    override val lang = "id"
 
     override val supportsLatest = true
 
     private val apiHeaders: Headers by lazy { apiHeadersBuilder().build() }
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             val headers = request.headers.newBuilder().apply {
@@ -238,7 +229,7 @@ class Shinigami : HttpSource() {
         val result = response.parseAs<ShinigamiPageListDto>()
 
         return result.pageList.chapterPage.pages.mapIndexed { index, imageName ->
-            Page(index = index, imageUrl = "$cdnUrl${result.pageList.chapterPage.path}$imageName")
+            Page(index = index, imageUrl = "${result.pageList.baseUrl}${result.pageList.chapterPage.path}$imageName")
         }
     }
 

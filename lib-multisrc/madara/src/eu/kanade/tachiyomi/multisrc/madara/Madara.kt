@@ -35,16 +35,11 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-abstract class Madara(
-    override val name: String,
-    override val baseUrl: String,
-    final override val lang: String,
-    protected val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US),
-) : HttpSource() {
+abstract class Madara : HttpSource() {
+
+    protected open val dateFormat: SimpleDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.US)
 
     override val supportsLatest = true
-
-    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -240,13 +235,19 @@ abstract class Madara(
     }
 
     // load more
-    protected fun loadMoreRequest(page: Int, popular: Boolean): Request {
+    protected open fun loadMoreRequest(page: Int, popular: Boolean): Request {
         val formBody = FormBody.Builder().apply {
             add("action", "madara_load_more")
             add("page", (page - 1).toString())
             add("template", "madara-core/content/content-archive")
             add("vars[orderby]", "meta_value_num")
             add("vars[paged]", "1")
+
+            if (filterNonMangaItems) {
+                add("vars[meta_query][0][key]", "_wp_manga_chapter_type")
+                add("vars[meta_query][0][value]", "manga")
+            }
+
             add("vars[post_type]", "wp-manga")
             add("vars[post_status]", "publish")
             add("vars[meta_key]", if (popular) "_wp_manga_views" else "_latest_update")
@@ -823,9 +824,27 @@ abstract class Madara(
     /**
      *  Get the best image quality available from srcset
      */
-    protected open fun String.getSrcSetImage(): String? = this.split(" ")
-        .filter(URL_REGEX::matches)
-        .maxOfOrNull(String::toString)
+    protected open fun String.getSrcSetImage(): String? {
+        val images = this.split(",")
+            .map { it.trim().split(WHITESPACE_REGEX, limit = 2) }
+            .filter { it.isNotEmpty() && URL_REGEX.matches(it[0]) }
+
+        val imagesWithDescriptor = images
+            .filter { it.size == 2 }
+            .mapNotNull { candidate ->
+                IMAGE_DESCRIPTOR_REGEX.find(candidate[1])?.let { match ->
+                    Pair(candidate[0], match.groupValues[1].toFloat())
+                }
+            }
+
+        // Prefer images with descriptors as to get the highest resolution
+        if (imagesWithDescriptor.isNotEmpty()) {
+            return imagesWithDescriptor.maxByOrNull { it.second }?.first
+        }
+
+        // Fallback to lexicographical comparison of image URLs
+        return images.maxOfOrNull { it.first() }
+    }
 
     /**
      *  Apply any additional processing to the thumbnail URL if needed.
@@ -1169,6 +1188,8 @@ abstract class Madara(
     companion object {
         const val URL_SEARCH_PREFIX = "slug:"
         val URL_REGEX = """^(https?://[^\s/$.?#].[^\s]*)${'$'}""".toRegex()
+        val WHITESPACE_REGEX = """\s+""".toRegex()
+        val IMAGE_DESCRIPTOR_REGEX = """^(\d+|\d+\.\d+)([wx])$""".toRegex()
     }
 }
 

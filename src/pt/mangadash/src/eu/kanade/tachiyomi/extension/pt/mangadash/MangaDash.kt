@@ -20,6 +20,7 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
@@ -40,16 +41,14 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.minutes
 
 @Suppress("unused")
-class MangaDash :
+@Source
+abstract class MangaDash :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "MangaDash"
-    override val baseUrl = "https://mangadash.net"
-    override val lang = "pt-BR"
     override val supportsLatest = true
 
     private val preferences by getPreferencesLazy()
@@ -144,7 +143,7 @@ class MangaDash :
         chain.proceed(request)
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(loginInterceptor)
         .addInterceptor(pdfInterceptor)
         .build()
@@ -189,7 +188,7 @@ class MangaDash :
 
     private fun performLogin(username: String, password: String) {
         val loginUrl = "$baseUrl/auth/login"
-        val baseClient = network.cloudflareClient
+        val baseClient = network.client
 
         // 1. Get CSRF Token. Using Use block for safety.
         val getRequest = GET(loginUrl, headers)
@@ -310,8 +309,8 @@ class MangaDash :
 
             // Create a specific client with a longer timeout to prevent OkHttp crashing on 30MB+ PDF downloads
             val pdfClient = client.newBuilder()
-                .readTimeout(3, TimeUnit.MINUTES)
-                .connectTimeout(1, TimeUnit.MINUTES)
+                .readTimeout(3.minutes)
+                .connectTimeout(1.minutes)
                 .build()
 
             val pdfHeaders = headersBuilder()

@@ -7,19 +7,16 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.Request
 import okhttp3.Response
 
-class AriaToon : HttpSource() {
+@Source
+abstract class AriaToon : HttpSource() {
 
-    override val name = "AriaToon"
-    override val baseUrl = "https://ariatoon.com"
-    override val lang = "ar"
     override val supportsLatest = true
-
-    override val client = network.cloudflareClient
 
     private val apiUrl = "https://api.ariatoon.com/v1"
     private val cdnUrl = "https://api.ariatoon.com/uploads"

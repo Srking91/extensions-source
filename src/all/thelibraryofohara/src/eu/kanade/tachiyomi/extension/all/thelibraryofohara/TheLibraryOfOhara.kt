@@ -9,8 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
 import keiyoushi.utils.tryParse
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Document
@@ -19,15 +19,21 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class TheLibraryOfOhara(override val lang: String, private val siteLang: String) : HttpSource() {
+@Source
+abstract class TheLibraryOfOhara : HttpSource() {
 
-    override val name = "The Library of Ohara"
-
-    override val baseUrl = "https://thelibraryofohara.com"
+    private val siteLang: String
+        get() = when (lang) {
+            "id" -> "Indonesia"
+            "en" -> "English"
+            "es" -> "Spanish"
+            "it" -> "Italian"
+            "ar" -> "Arabic"
+            "fr" -> "French"
+            else -> lang
+        }
 
     override val supportsLatest = false
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.ROOT)
 

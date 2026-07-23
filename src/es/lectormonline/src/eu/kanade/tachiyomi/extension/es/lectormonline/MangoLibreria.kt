@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.extractNextJs
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.JsonObject
@@ -17,18 +18,15 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class MangoLibreria : HttpSource() {
+@Source
+abstract class MangoLibreria : HttpSource() {
 
-    override val name = "MangoLibreria"
-    override val baseUrl = "https://mangolibreria.com"
-    override val lang = "es"
     override val supportsLatest = true
-    override val versionId = 2
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .addInterceptor { chain ->
             val request = chain.request()
             // The image CDN rejects requests with the main site's Referer header.

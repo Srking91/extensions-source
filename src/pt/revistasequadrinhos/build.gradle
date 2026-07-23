@@ -1,8 +1,0 @@
-ext {
-    extName = 'Revistas e Quadrinhos'
-    extClass = '.RevistasEQuadrinhos'
-    extVersionCode = 1
-    isNsfw = true
-}
-
-apply from: "$rootDir/common.gradle"

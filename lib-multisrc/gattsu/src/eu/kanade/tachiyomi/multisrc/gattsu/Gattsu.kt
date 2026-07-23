@@ -13,22 +13,15 @@ import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.utils.tryParse
 import okhttp3.Headers
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-abstract class Gattsu(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class Gattsu : HttpSource() {
 
     override val supportsLatest = true
-
-    override val client: OkHttpClient = network.cloudflareClient
 
     override fun headersBuilder() = Headers.Builder()
         .add("Accept", ACCEPT)

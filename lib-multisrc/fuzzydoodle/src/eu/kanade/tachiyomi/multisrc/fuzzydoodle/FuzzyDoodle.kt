@@ -24,15 +24,9 @@ import java.util.Calendar
 /*
  * https://github.com/jhin1m/fuzzy-doodle
  */
-abstract class FuzzyDoodle(
-    override val name: String,
-    override val baseUrl: String,
-    override val lang: String,
-) : HttpSource() {
+abstract class FuzzyDoodle : HttpSource() {
 
     override val supportsLatest = true
-
-    override val client = network.cloudflareClient
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")

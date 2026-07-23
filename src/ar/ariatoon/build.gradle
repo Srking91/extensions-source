@@ -1,8 +1,0 @@
-ext {
-    extName = 'AriaToon'
-    extClass = '.AriaToon'
-    extVersionCode = 1
-    isNsfw = false
-}
-
-apply from: "$rootDir/common.gradle"

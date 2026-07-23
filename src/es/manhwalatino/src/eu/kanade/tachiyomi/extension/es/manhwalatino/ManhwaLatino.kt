@@ -2,9 +2,10 @@ package eu.kanade.tachiyomi.extension.es.manhwalatino
 
 import eu.kanade.tachiyomi.multisrc.madara.Madara
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Response
@@ -12,17 +13,13 @@ import okhttp3.ResponseBody.Companion.asResponseBody
 import org.jsoup.nodes.Element
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.time.Duration.Companion.seconds
 
-class ManhwaLatino :
-    Madara(
-        "Manhwa-Latino",
-        "https://manhwa-latino.com",
-        "es",
-        SimpleDateFormat("dd/MM/yyyy", Locale("es")),
-    ) {
+@Source
+abstract class ManhwaLatino : Madara() {
+    override val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale("es"))
 
     override val client: OkHttpClient = super.client.newBuilder()
-        .rateLimit(1, 2)
         .addInterceptor { chain ->
             val request = chain.request()
 
@@ -51,6 +48,7 @@ class ManhwaLatino :
 
             return@addInterceptor response
         }
+        .rateLimit(1, 2.seconds)
         .build()
 
     override val useNewChapterEndpoint = true

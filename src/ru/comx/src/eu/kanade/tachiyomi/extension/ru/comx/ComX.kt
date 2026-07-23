@@ -7,7 +7,6 @@ import androidx.preference.PreferenceScreen
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservable
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -16,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferences
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.tryParse
@@ -36,49 +37,23 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Locale
-import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
-class ComX :
+@Source
+abstract class ComX :
     HttpSource(),
     ConfigurableSource {
 
-    override val id = 1114173092141608635
-
-    override val name = "Com-X"
-
     private val preferences: SharedPreferences = getPreferences()
-
-    init {
-        preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)?.let { domain ->
-            if (!domain.matches(URL_REGEX)) {
-                preferences.edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-        preferences.getString(DEFAULT_DOMAIN_PREF, null).let { prefDefaultDomain ->
-            if (prefDefaultDomain != DOMAIN_DEFAULT) {
-                preferences.edit()
-                    .putString(DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .putString(DEFAULT_DOMAIN_PREF, DOMAIN_DEFAULT)
-                    .apply()
-            }
-        }
-    }
-
-    override val baseUrl = preferences.getString(DOMAIN_PREF, DOMAIN_DEFAULT)!!
-
-    override val lang = "ru"
 
     override val supportsLatest = true
 
     override fun headersBuilder(): Headers.Builder = super.headersBuilder()
         .add("Referer", "$baseUrl/")
 
-    override val client = network.cloudflareClient.newBuilder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .rateLimit(3)
+    override val client = network.client.newBuilder()
+        .connectTimeout(10.seconds)
+        .readTimeout(30.seconds)
         .addInterceptor { chain ->
             val request = chain.request()
             val url = request.url.toString()
@@ -115,6 +90,7 @@ class ComX :
             }
             response
         }
+        .rateLimit(3)
         .build()
 
     // Popular
@@ -291,9 +267,15 @@ class ComX :
         var nonce = 0L
         val md = MessageDigest.getInstance("SHA-256")
         val start = System.currentTimeMillis()
-        while (md.digest("$token:$nonce".toByteArray())[0] != 0.toByte()) {
-            nonce++
-            if (nonce > 1_000_000L) throw IOException("Antibot challenge failed: PoW exhausted")
+        val powHash = run {
+            while (true) {
+                val hash = md.digest("$token:$nonce".toByteArray()).joinToString("") { "%02x".format(it) }
+                if (hash.startsWith("00")) {
+                    return@run hash
+                }
+                nonce++
+                if (nonce > 1_000_000L) throw IOException("Antibot challenge failed: PoW exhausted")
+            }
         }
         val workTime = (System.currentTimeMillis() - start).coerceAtLeast(120)
 
@@ -304,13 +286,17 @@ class ComX :
             .add("screen_w", "390").add("screen_h", "844").add("screen_cd", "24")
             .add("wgv", "Apple Inc.").add("wgr", "Apple GPU")
             .add("tz", "-180").add("dpr", "3").add("cdp", "0").add("cdpf", "")
+            .add("pow_nonce", nonce.toString())
+            .add("pow_hash", powHash.toString())
             .build()
 
         val verifyReq = Request.Builder()
             .url("$baseUrl/_v")
             .post(verifyBody)
+            .headers(headers)
             .header("X-Requested-With", "XMLHttpRequest")
             .header("Referer", challenge.request.url.toString())
+            .header("Content-Type", "application/x-www-form-urlencoded")
             .build()
         chain.proceed(verifyReq).close()
 
@@ -490,23 +476,6 @@ class ComX :
 
     override fun setupPreferenceScreen(screen: PreferenceScreen) {
         EditTextPreference(screen.context).apply {
-            key = DOMAIN_PREF
-            title = "Домен"
-            summary = "$baseUrl\n\nПо умолчанию: $DOMAIN_DEFAULT"
-            setDefaultValue(DOMAIN_DEFAULT)
-            setOnPreferenceChangeListener { _, newValue ->
-                if (!newValue.toString().matches(URL_REGEX)) {
-                    val warning = "Домен должен содаржать https:// или http://"
-                    Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
-                    return@setOnPreferenceChangeListener false
-                }
-                val warning = "Для смены домена необходимо перезапустить приложение с полной остановкой."
-                Toast.makeText(screen.context, warning, Toast.LENGTH_LONG).show()
-                true
-            }
-        }.let(screen::addPreference)
-
-        EditTextPreference(screen.context).apply {
             key = FORCE_IMG_DOMAIN_PREF
             title = "Домен картинок"
             summary = "Если изображения не грузяться очистите «Кэш приложения» и всевозможные данные в настройках приложения  (Настройки -> Дополнительно) \nи перезапустите приложение с полной остановкой" +
@@ -524,14 +493,7 @@ class ComX :
 
     companion object {
         private val dateFormat by lazy { SimpleDateFormat("dd.MM.yyyy", Locale.US) }
-
-        private const val DOMAIN_DEFAULT = "https://ru.com-x.life"
-
-        private const val DEFAULT_DOMAIN_PREF = "DEFAULT_DOMAIN_PREF"
-        private const val DOMAIN_PREF = "DOMAIN_PREF"
         private const val FORCE_IMG_DOMAIN_PREF = "FORCE_IMG_DOMAIN_PREF"
-
-        private val URL_REGEX = Regex("^https?://.+")
         private val IMG_DOMAIN_REGEX = "\"host\":\"(.+?)\"".toRegex()
         private val TOKEN_REGEX = """token:\s*"([^"]+)"""".toRegex()
     }

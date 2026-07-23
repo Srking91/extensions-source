@@ -2,7 +2,6 @@ package eu.kanade.tachiyomi.extension.en.mangademon
 
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
 import eu.kanade.tachiyomi.source.model.Page
@@ -10,9 +9,10 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.tryParse
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
 import org.jsoup.nodes.Element
@@ -21,32 +21,15 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-class MangaDemon : HttpSource() {
+@Source
+abstract class MangaDemon : HttpSource() {
 
-    override val versionId = 2
-
-    override val lang = "en"
     override val supportsLatest = true
-    override val name = "Manga Demon"
-    override val baseUrl = "https://demonicscans.org"
 
-    override val client = network.cloudflareClient.newBuilder()
-        .addInterceptor(::thumbnailInterceptor)
+    override val client = network.client.newBuilder()
+        .rateLimit(6) { it.toString().contains("images/thumbnails") }
         .rateLimit(2)
         .build()
-
-    private val thumbnailClient = network.cloudflareClient.newBuilder()
-        .rateLimit(6)
-        .build()
-
-    private fun thumbnailInterceptor(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-        return if (request.url.toString().contains("images/thumbnails")) {
-            thumbnailClient.newCall(request).execute()
-        } else {
-            chain.proceed(request)
-        }
-    }
 
     override fun headersBuilder() = super.headersBuilder()
         .add("Referer", "$baseUrl/")
@@ -149,10 +132,15 @@ class MangaDemon : HttpSource() {
                 thumbnail_url = selectFirst("div#manga-page img")!!.attr("abs:src")
                 genre = select("div.genres-list > li").joinToString { it.text() }
                 description = selectFirst("div#manga-info-rightColumn > div > div.white-font")!!.text()
-                author = select("div#manga-info-stats > div:has(> li:eq(0):contains(Author)) > li:eq(1)").text()
+                author = parseAuthor(select("div#manga-info-stats > div:has(> li:eq(0):contains(Author)) > li:eq(1)").text())
                 status = parseStatus(select("div#manga-info-stats > div:has(> li:eq(0):contains(Status)) > li:eq(1)").text())
             }
         }
+    }
+
+    private fun parseAuthor(author: String?) = when {
+        author == null || author.contains("Updating", ignoreCase = true) -> null
+        else -> author
     }
 
     private fun parseStatus(status: String?) = when {

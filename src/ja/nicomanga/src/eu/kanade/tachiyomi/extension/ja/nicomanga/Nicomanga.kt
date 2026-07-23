@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.extension.ja.nicomanga
 
 import eu.kanade.tachiyomi.network.GET
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -10,6 +9,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.parseAs
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -18,13 +19,8 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import java.util.Calendar
 
-class Nicomanga : HttpSource() {
-
-    override val name = "Nicomanga"
-
-    override val baseUrl = "https://nicomanga.com"
-
-    override val lang = "ja"
+@Source
+abstract class Nicomanga : HttpSource() {
 
     override val supportsLatest = true
 

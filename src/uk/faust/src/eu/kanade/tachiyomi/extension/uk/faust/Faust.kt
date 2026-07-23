@@ -12,6 +12,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -22,34 +23,32 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.add
 import okhttp3.Request
 import okhttp3.Response
 import java.text.SimpleDateFormat
-import java.time.Year
+import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.collections.joinToString
 import kotlin.collections.orEmpty
 import kotlin.text.ifEmpty
 
-class Faust :
+@Source
+abstract class Faust :
     HttpSource(),
     ConfigurableSource {
 
-    override val name = "Faust"
-    override val baseUrl = "https://faust-web.com"
     private val apiUrl = "https://faust-web.com/api"
-    override val lang = "uk"
     override val supportsLatest = true
     private var genresFetched: Boolean = false
     private var tagsFetched: Boolean = false
     private val preferences by getPreferencesLazy()
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .build()
 
     override fun headersBuilder() = super.headersBuilder()
-        .add("Origin", baseUrl)
+        .add("Origin", "$baseUrl/")
         .add("Content-Type", "application/json")
 
     // ============================== Search ===============================
@@ -70,68 +69,60 @@ class Faust :
     }
 
     // ============================== Search/Utility ===============================
-    private fun makeSearchRequest(sort: String? = null, page: Int, query: String? = "", filters: FilterList = getFilterList()): Request {
+    private fun makeSearchRequest(sort: String? = null, page: Int, query: String? = "", filters: FilterList? = null): Request {
         val url = "$apiUrl/titles/search/library"
-
-        // Prepare the data for serialization
+        val checkYear = Calendar.getInstance().get(Calendar.YEAR) + 1
         val requestBodyData = SearchRequestBody(
             searchQuery = query,
             page = page,
             pageSize = 30,
         )
 
-        // Apply filters to the requestBodyData
-        filters.forEach { filter ->
+        filters?.forEach { filter ->
             when (filter) {
                 is OrderBy -> {
                     val asc = if (filter.state?.ascending == true) "-" else "+"
-                    requestBodyData.sortBy = sort ?: "$asc${filter.selected}"
+                    requestBodyData.sortBy = "$asc${filter.selected}"
                 }
                 is CategoriesFilter -> filter.selected?.let { requestBodyData.mangaType = it }
                 is TranslationStatusFilter -> filter.selected?.let { requestBodyData.translationStatus = it }
                 is PublicationStatusFilter -> filter.selected?.let { requestBodyData.publicationStatus = it }
                 is AgeStatusFilter -> filter.selected?.let { requestBodyData.ageBracket = it }
                 is YearRangeFilter -> {
-                    filter.minValue?.let { requestBodyData.yearFrom = checkMinRange(it, 1970, Year.now().value + 1) }
-                    filter.maxValue?.let { requestBodyData.yearTo = checkMaxRange(it, 1970, Year.now().value + 1) }
+                    filter.minValue?.let { requestBodyData.yearFrom = checkMinRange(it, 1970, checkYear) }
+                    filter.maxValue?.let { requestBodyData.yearTo = checkMaxRange(it, 1970, checkYear) }
                 }
                 is ChaptersRangeFilter -> {
                     filter.minValue?.let { requestBodyData.minChapters = checkMinRange(it, 0, 3000) }
                     filter.maxValue?.let { requestBodyData.maxChapters = checkMaxRange(it, 0, 3000) }
                 }
                 is GenresFilter -> {
-                    filter.included?.let {
-                        requestBodyData.genreIds = JsonArray(it.map { genreId -> JsonPrimitive(genreId) })
-                    }
-                    filter.excluded?.let {
-                        val allExcluded = it.plus(ignoreGenres()).distinct()
-                        requestBodyData.excludeGenreIds = JsonArray(allExcluded.map { genreId -> JsonPrimitive(genreId) })
-                    } ?: run {
-                        if (ignoreGenres().isNotEmpty()) {
-                            requestBodyData.excludeGenreIds = JsonArray(ignoreGenres().map { genreId -> JsonPrimitive(genreId) })
-                        }
-                    }
+                    filter.included?.let { requestBodyData.genreIds = JsonArray(it.map(::JsonPrimitive)) }
+                    filter.excluded?.let { requestBodyData.excludeGenreIds = JsonArray(it.map(::JsonPrimitive)) }
                 }
                 is TagsFilter -> {
-                    filter.included?.let {
-                        requestBodyData.tagIds = JsonArray(it.map { tagId -> JsonPrimitive(tagId) })
-                    }
-                    filter.excluded?.let {
-                        requestBodyData.excludeTagIds = JsonArray(it.map { tagId -> JsonPrimitive(tagId) })
-                    }
+                    filter.included?.let { requestBodyData.tagIds = JsonArray(it.map(::JsonPrimitive)) }
+                    filter.excluded?.let { requestBodyData.excludeTagIds = JsonArray(it.map(::JsonPrimitive)) }
                 }
                 else -> {}
             }
         }
 
-        // Convert the data class to JSON request body
-        val body = requestBodyData.toJsonRequestBody() // Assuming toJsonRequestBody() handles serialization
+        if (filters.isNullOrEmpty()) {
+            val ignoredGenres = ignoreGenres()
+            if (ignoredGenres.isNotEmpty()) {
+                requestBodyData.excludeGenreIds = JsonArray(ignoredGenres.map(::JsonPrimitive))
+            }
+            requestBodyData.sortBy = sort
+        }
+
+        val body = requestBodyData.toJsonRequestBody()
 
         return POST(url, headers, body)
     }
 
     // ============================== Popular ===============================
-    override fun popularMangaRequest(page: Int) = makeSearchRequest(sort = "-rating", page = page)
+    override fun popularMangaRequest(page: Int) = makeSearchRequest(sort = "-popularity", page = page)
 
     override fun popularMangaParse(response: Response) = searchMangaParse(response)
 
@@ -228,10 +219,10 @@ class Faust :
             genresDeferred?.await()
             tagsDeferred?.await()
         }
-        val filters = mutableListOf<Filter<*>>(
+        val filters = mutableListOf(
             OrderBy(),
             Filter.Separator(),
-            GenresFilter(),
+            GenresFilter(ignoreGenres()),
             Filter.Separator(),
             TagsFilter(),
             Filter.Separator(),
@@ -334,11 +325,12 @@ class Faust :
         }.let(screen::addPreference)
     }
 
-    private fun parseDate(dateStr: String?): Long = dateFormatSite.tryParse(dateStr)
+    private fun parseDate(dateStr: String?): Long = dateFormatSite.tryParse(dateStr?.substringBefore("."))
 
     companion object {
-        private val dateFormatSite = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSX", Locale.ROOT)
-
+        private val dateFormatSite = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
         private const val SITE_GENRES_PREF = "site_hidden_genres"
         private const val SITE_GENRES_PREF_TITLES = "site_hidden_genres_titles"
         private const val SITE_GENRES_PREF_TITLE = "Приховані категорії"

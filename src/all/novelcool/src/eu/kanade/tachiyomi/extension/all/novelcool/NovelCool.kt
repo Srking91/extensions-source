@@ -6,7 +6,6 @@ import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
 import eu.kanade.tachiyomi.network.asObservableSuccess
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -16,6 +15,8 @@ import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.parseAs
 import keiyoushi.utils.toJsonRequestBody
@@ -31,20 +32,18 @@ import rx.Observable
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-open class NovelCool(
-    final override val baseUrl: String,
-    final override val lang: String,
-    private val siteLang: String = lang,
-) : HttpSource(),
+@Source
+abstract class NovelCool :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "NovelCool"
+    private val siteLang: String get() = if (lang == "pt-BR") "br" else lang
 
     override val supportsLatest = true
 
     private val apiUrl = "https://api.novelcool.com"
 
-    override val client = network.cloudflareClient.newBuilder()
+    override val client = network.client.newBuilder()
         .rateLimit(1)
         .build()
 

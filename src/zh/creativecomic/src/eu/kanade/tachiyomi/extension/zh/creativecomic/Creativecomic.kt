@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import keiyoushi.annotation.Source
 import keiyoushi.lib.cryptoaes.CryptoAES
 import keiyoushi.utils.decodeHex
 import keiyoushi.utils.parseAs
@@ -33,11 +34,9 @@ import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-class Creativecomic : HttpSource() {
-    override val name: String = "CCC追漫台"
-    override val lang: String = "zh-Hant"
+@Source
+abstract class Creativecomic : HttpSource() {
     override val supportsLatest: Boolean = true
-    override val baseUrl: String = "https://www.creative-comic.tw"
     private val apiUrl = "https://api.creative-comic.tw"
     private var pageKey: ByteArray? = null
     private var pageIv: ByteArray? = null
@@ -105,7 +104,7 @@ class Creativecomic : HttpSource() {
         return Pair(pageKey!!, pageIv!!)
     }
 
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(::authIntercept)
         .build()
 

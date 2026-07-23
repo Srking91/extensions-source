@@ -5,7 +5,6 @@ import androidx.preference.PreferenceScreen
 import androidx.preference.SwitchPreferenceCompat
 import eu.kanade.tachiyomi.network.GET
 import eu.kanade.tachiyomi.network.POST
-import eu.kanade.tachiyomi.network.interceptor.rateLimit
 import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.MangasPage
@@ -15,6 +14,8 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.annotation.Source
+import keiyoushi.network.rateLimit
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.tryParse
 import okhttp3.FormBody
@@ -30,15 +31,42 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-class Akuma(
-    override val lang: String,
-    private val akumaLang: String,
-) : HttpSource(),
+@Source
+abstract class Akuma :
+    HttpSource(),
     ConfigurableSource {
 
-    override val name = "Akuma"
-
-    override val baseUrl = "https://akuma.moe"
+    private val akumaLang: String
+        get() = when (lang) {
+            "all" -> "all"
+            "en" -> "english"
+            "id" -> "indonesian"
+            "jv" -> "javanese"
+            "ca" -> "catalan"
+            "ceb" -> "cebuano"
+            "cs" -> "czech"
+            "da" -> "danish"
+            "de" -> "german"
+            "et" -> "estonian"
+            "es" -> "spanish"
+            "eo" -> "esperanto"
+            "fr" -> "french"
+            "it" -> "italian"
+            "hi" -> "hindi"
+            "hu" -> "hungarian"
+            "nl" -> "dutch"
+            "pl" -> "polish"
+            "pt" -> "portuguese"
+            "vi" -> "vietnamese"
+            "tr" -> "turkish"
+            "ru" -> "russian"
+            "uk" -> "ukrainian"
+            "ar" -> "arabic"
+            "ko" -> "korean"
+            "zh" -> "chinese"
+            "ja" -> "japanese"
+            else -> lang
+        }
 
     override val supportsLatest = false
 
@@ -46,12 +74,12 @@ class Akuma(
 
     private var storedToken: String? = null
 
-    private val ddosGuardIntercept = DDosGuardInterceptor(network.cloudflareClient)
+    private val ddosGuardIntercept = DDosGuardInterceptor(network.client)
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ENGLISH).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
-    override val client: OkHttpClient = network.cloudflareClient.newBuilder()
+    override val client: OkHttpClient = network.client.newBuilder()
         .addInterceptor(ddosGuardIntercept)
         .addInterceptor(::tokenInterceptor)
         .rateLimit(2)

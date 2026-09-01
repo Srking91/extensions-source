@@ -13,13 +13,13 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.SMangaUpdate
-import eu.kanade.tachiyomi.util.asJsoup
 import keiyoushi.annotation.Source
 import keiyoushi.network.get
 import keiyoushi.network.post
 import keiyoushi.network.rateLimit
 import keiyoushi.source.KeiSource
 import keiyoushi.utils.GraphQLException
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.firstInstanceOrNull
 import keiyoushi.utils.getPreferencesLazy
 import keiyoushi.utils.graphQLBody
@@ -239,6 +239,9 @@ abstract class AllManga :
     }
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val interfaceName = (1..(10..20).random())
+            .map { (('a'..'z') + ('A'..'Z')).random() }
+            .joinToString("")
         val mangaId = chapter.memo["mangaId"]?.string ?: throw Exception("Refresh Chapter List")
         val mangaUrl = "$baseUrl/manga/$mangaId"
         val chapterUrl = getChapterUrl(chapter).toHttpUrl().encodedPath
@@ -252,29 +255,61 @@ abstract class AllManga :
                 }
             }
 
-            response.asJsoup()
+            response.asJsoup().also {
+                it.head().prepend(
+                    """
+                    <script>
+                    (() => {
+                        const originalJson = Response.prototype.json;
+                        Response.prototype.json = function() {
+                            return originalJson.call(this).then(data => {
+                                if (data && data.chapterPages) {
+                                    window.$interfaceName.post(JSON.stringify(data));
+                                }
+                                return data;
+                            });
+                        };
+
+                        const originalParse = JSON.parse;
+                        JSON.parse = new Proxy(originalParse, {
+                            apply(target, thisArg, args) {
+                                const result = Reflect.apply(target, thisArg, args);
+                                if (result && result.chapterPages) {
+                                    window.$interfaceName.post(args[0]);
+                                }
+                                return result;
+                            }
+                        });
+
+                      const hook = e => {
+                        if (e.tagName.toUpperCase() === "IFRAME") {
+                          Object.defineProperty(e, "contentWindow", {
+                            get: () => null,
+                            configurable: false
+                          });
+                        }
+                        return e;
+                      };
+
+                      for (const k of ["createElement", "createElementNS"]) {
+                        const c = Document.prototype[k];
+                        Document.prototype[k] = function(...a) {
+                          return hook(c.call(this, ...a));
+                        };
+                      }
+                    })();
+                    </script>
+                    """.trimIndent(),
+                )
+            }
         }
 
         val payload = runWebView {
             blockImages = true
             userAgent = headers["User-Agent"]!!
 
-            val interfaceName = (1..(10..20).random())
-                .map { (('a'..'z') + ('A'..'Z')).random() }
-                .joinToString("")
             val script = """
                 (function () {
-                    const originalParse = JSON.parse;
-                    JSON.parse = new Proxy(originalParse, {
-                        apply(target, thisArg, args) {
-                            const result = Reflect.apply(target, thisArg, args);
-                            if (result && result.chapterPages) {
-                                window.$interfaceName.post(args[0]);
-                            }
-                            return result;
-                        }
-                    });
-
                     function triggerChapterNav() {
                         const a = document.createElement('a');
                         a.href = a.dataset.href = '$chapterUrl';

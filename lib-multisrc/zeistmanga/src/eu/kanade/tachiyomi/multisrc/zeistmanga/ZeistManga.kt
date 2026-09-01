@@ -8,7 +8,7 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SChapter
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
-import eu.kanade.tachiyomi.util.asJsoup
+import keiyoushi.utils.asJsoup
 import keiyoushi.utils.tryParse
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -118,7 +118,7 @@ abstract class ZeistManga : HttpSource() {
 
         val mangalist = mangas.toMutableList()
         if (mangas.size == MAX_MANGA_RESULTS + 1) {
-            mangalist.removeLast()
+            mangalist.removeAt(mangalist.lastIndex)
             return MangasPage(mangalist, true)
         }
 
